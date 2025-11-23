@@ -38,7 +38,24 @@ func isSSHPid(pid int) bool {
 	if err != nil {
 		return false
 	}
-	return regexp.MustCompile(`sshd: ([a-zA-Z]+) \[net\]`).MatchString(strings.ReplaceAll(string(cmdLine), "\x00", " "))
+	cmdLineStr := strings.ReplaceAll(string(cmdLine), "\x00", " ")
+
+	patterns := []string{
+		`sshd:.*\[net\]`,
+		`sshd:.*@`,
+		`^sshd:`,
+		`sshd.*\[priv\]`,
+		`sshd.*\[accepted\]`,
+		`sshd-auth:`,
+		`sshd-session:`,
+	}
+
+	for _, pattern := range patterns {
+		if matched, _ := regexp.MatchString(pattern, cmdLineStr); matched {
+			return true
+		}
+	}
+	return false
 }
 
 func isSUPid(pid int) bool {
